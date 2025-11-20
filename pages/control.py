@@ -2,55 +2,80 @@ import streamlit as st
 import paho.mqtt.client as mqtt
 import json
 
-BROKER = "broker.emqx.io"
+BROKER = "test.mosquitto.org"
 TOPIC_CONTROL = "smarteco/control"
 TOPIC_ESTADO = "smarteco/estado"
 
-# Necesario por paho-mqtt v2
-client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, client_id="SmartEcoHome_ControlWeb")
+st.title("🟢 SmartEcoHome - Panel de Control")
 
-estado_recibido = st.session_state.get("estado_recibido", "Esperando estado...")
+# -----------------------------------------
+# ESTADO GLOBAL (se refresca automáticamente)
+# -----------------------------------------
+if "estado_actual" not in st.session_state:
+    st.session_state.estado_actual = "Esperando datos..."
 
-# ---------- CALLBACK AL RECIBIR MENSAJE ----------
-def on_message(client, userdata, message):
-    payload = message.payload.decode()
+estado_box = st.empty()
+estado_box.info("Estado del sistema: " + st.session_state.estado_actual)
+
+# -----------------------------------------
+# CALLBACKS MQTT
+# -----------------------------------------
+def on_connect(client, userdata, flags, reason, properties=None):
+    client.subscribe(TOPIC_ESTADO)
+
+def on_message(client, userdata, msg):
     try:
-        data = json.loads(payload)
-        st.session_state["estado_recibido"] = f"{data['tipo']}: {data['detalle']}"
-    except:
-        st.session_state["estado_recibido"] = payload
+        data = json.loads(msg.payload.decode())
+        tipo = data.get("tipo")
+        detalle = data.get("detalle")
 
+        texto = f"{tipo}: {detalle}"
+        st.session_state.estado_actual = texto
+        estado_box.info("Estado del sistema: " + texto)
+    except:
+        pass
+
+# -----------------------------------------
+# MQTT CONFIG
+# -----------------------------------------
+client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="SmartEcoHome_ControlWeb_123")
+client.on_connect = on_connect
 client.on_message = on_message
 
-# ---------- CONEXIÓN ----------
-def conectar_mqtt():
-    if not client.is_connected():
-        client.connect(BROKER, 1883, 60)
-        client.subscribe(TOPIC_ESTADO)
-        client.loop_start()
+client.connect(BROKER, 1883, 60)
+client.loop_start()
 
-conectar_mqtt()
+# -----------------------------------------
+# FUNCIÓN PARA PUBLICAR
+# -----------------------------------------
+def publicar(action, value=0):
+    payload = json.dumps({"action": action, "value": value})
+    client.publish(TOPIC_CONTROL, payload)
+    st.success(f"Comando enviado: {action} ({value})")
 
-# ---------- UI ----------
-st.title("🔧 Control SmartEcoHome")
-
-st.subheader("Estado del sistema")
-st.info(st.session_state.get("estado_recibido", "Esperando datos..."))
-
+# -----------------------------------------
+# INTERFAZ DE BOTONES
+# -----------------------------------------
+st.subheader("💡 Control de iluminación")
 col1, col2 = st.columns(2)
+if col1.button("Encender luz"):
+    publicar("luz_on")
 
-with col1:
-    if st.button("💡 Encender luz"):
-        client.publish(TOPIC_CONTROL, json.dumps({"action": "luz_on"}))
-    if st.button("🌀 Encender ventilador"):
-        client.publish(TOPIC_CONTROL, json.dumps({"action": "vent_on"}))
-    if st.button("🔓 Abrir puerta"):
-        client.publish(TOPIC_CONTROL, json.dumps({"action": "puerta", "value": 90}))
+if col2.button("Apagar luz"):
+    publicar("luz_off")
 
-with col2:
-    if st.button("💡 Apagar luz"):
-        client.publish(TOPIC_CONTROL, json.dumps({"action": "luz_off"}))
-    if st.button("🌀 Apagar ventilador"):
-        client.publish(TOPIC_CONTROL, json.dumps({"action": "vent_off"}))
-    if st.button("🔒 Cerrar puerta"):
-        client.publish(TOPIC_CONTROL, json.dumps({"action": "puerta", "value": 0}))
+st.subheader("🌀 Control del ventilador")
+col3, col4 = st.columns(2)
+if col3.button("Encender ventilador"):
+    publicar("vent_on")
+
+if col4.button("Apagar ventilador"):
+    publicar("vent_off")
+
+st.subheader("🚪 Control de puerta")
+col5, col6 = st.columns(2)
+if col5.button("Abrir puerta"):
+    publicar("puerta", 90)
+
+if col6.button("Cerrar puerta"):
+    publicar("puerta", 0)
