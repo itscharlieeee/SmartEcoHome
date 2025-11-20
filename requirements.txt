@@ -1,0 +1,8 @@
+streamlit>=1.18
+paho-mqtt>=1.6
+speechrecognition>=3.8.1
+pydub>=0.25.1
+mediapipe>=0.10.0
+opencv-python>=4.7.0
+numpy>=1.23
+Pillow>=9.5
