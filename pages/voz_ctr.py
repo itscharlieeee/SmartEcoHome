@@ -70,5 +70,10 @@ if text:
         st.error("❌ No reconocí un comando válido.")
 
     # Limpia el input DE MANERA SEGURA sin causar error
+if "voice_hidden" not in st.session_state:
     st.session_state["voice_hidden"] = ""
+else:
+    # solo limpiar si ya procesamos un comando
+    if text:
+        st.session_state["voice_hidden"] = ""
 
