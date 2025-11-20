@@ -1,15 +1,16 @@
 import streamlit as st
 import paho.mqtt.client as mqtt
 import json
+import uuid
 
 BROKER = "broker.hivemq.com"
 TOPIC_CONTROL = "smarteco/control"
 
-client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1)
+# MQTT con client_id único (obligatorio en HiveMQ)
+client = mqtt.Client(client_id=f"voz_{uuid.uuid4()}", protocol=mqtt.MQTTv311)
 client.connect(BROKER, 1883, 60)
 
 st.title("🎤 Control por Voz – SmartEcoHome")
-
 st.write("Haz clic en el botón y permite acceso al micrófono.")
 
 # ----------- JAVASCRIPT PARA CAPTURAR VOZ -----------
@@ -23,8 +24,14 @@ function startRecognition(){
 
     recognition.onresult = function(event){
         const text = event.results[0][0].transcript;
-        document.getElementById("voice_text").value = text;
-        document.getElementById("voice_form").dispatchEvent(new Event("submit"));
+        const inputBox = window.parent.document.getElementById("voice_text");
+        inputBox.value = text;
+        const submitEvent = new Event("input", { bubbles: true });
+        inputBox.dispatchEvent(submitEvent);
+    }
+
+    recognition.onerror = function(event){
+        console.log("Error:", event.error);
     }
 
     recognition.start();
@@ -34,32 +41,40 @@ function startRecognition(){
 
 st.components.v1.html(voice_script, height=0)
 
-# ----------- FORMULARIO OCULTO PARA RECIBIR TEXTO -----------
-with st.form("voice_form", clear_on_submit=True):
-    text = st.text_input("", key="voice_text")
-    submitted = st.form_submit_button("")
+# ----------- INPUT OCULTO PARA RECIBIR TEXTO -----------
+
+text = st.text_input("", key="voice_text", label_visibility="collapsed")
 
 if st.button("🎙️ Iniciar reconocimiento de voz"):
     st.components.v1.html("<script>startRecognition()</script>", height=0)
 
-if submitted and text:
+# Cuando cambia el texto → procesar
+if text:
     st.success(f"Comando detectado: {text}")
 
-    # -------- MAPEO DE COMANDOS --------
     text_l = text.lower()
 
-    if "encender luz" in text_l:
+    # --------- MAPEO ROBUSTO DE COMANDOS ---------
+    if "encender luz" in text_l or "enciende luz" in text_l or "prende luz" in text_l:
         client.publish(TOPIC_CONTROL, json.dumps({"action": "luz_on"}))
-    elif "apagar luz" in text_l:
+
+    elif "apagar luz" in text_l or "apaga luz" in text_l:
         client.publish(TOPIC_CONTROL, json.dumps({"action": "luz_off"}))
-    elif "encender ventilador" in text_l:
+
+    elif "encender ventilador" in text_l or "enciende ventilador" in text_l or "prende ventilador" in text_l:
         client.publish(TOPIC_CONTROL, json.dumps({"action": "vent_on"}))
-    elif "apagar ventilador" in text_l:
+
+    elif "apagar ventilador" in text_l or "apaga ventilador" in text_l:
         client.publish(TOPIC_CONTROL, json.dumps({"action": "vent_off"}))
-    elif "abrir puerta" in text_l:
+
+    elif "abrir puerta" in text_l or "abre puerta" in text_l:
         client.publish(TOPIC_CONTROL, json.dumps({"action": "puerta", "value": 90}))
-    elif "cerrar puerta" in text_l:
+
+    elif "cerrar puerta" in text_l or "cierra puerta" in text_l:
         client.publish(TOPIC_CONTROL, json.dumps({"action": "puerta", "value": 0}))
+
     else:
-        st.error("No reconocí un comando válido.")
-        st.error("No entendí la instrucción")
+        st.error("❌ No reconocí un comando válido.")
+
+    # Limpiar el texto para permitir nuevos comandos
+    st.session_state.voice_text = ""
