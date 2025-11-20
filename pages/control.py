@@ -2,7 +2,7 @@ import streamlit as st
 import paho.mqtt.client as mqtt
 import json
 
-BROKER = "test.mosquitto.org"
+BROKER = "broker.hivemq.com"
 TOPIC_CONTROL = "smarteco/control"
 TOPIC_ESTADO = "smarteco/estado"
 
