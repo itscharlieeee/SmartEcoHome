@@ -6,14 +6,13 @@ import uuid
 BROKER = "broker.hivemq.com"
 TOPIC_CONTROL = "smarteco/control"
 
-# MQTT con client_id único (obligatorio en HiveMQ)
 client = mqtt.Client(client_id=f"voz_{uuid.uuid4()}", protocol=mqtt.MQTTv311)
 client.connect(BROKER, 1883, 60)
 
 st.title("🎤 Control por Voz – SmartEcoHome")
 st.write("Haz clic en el botón y permite acceso al micrófono.")
 
-# ----------- JAVASCRIPT PARA CAPTURAR VOZ -----------
+# ---------- JavaScript para captura ----------
 voice_script = """
 <script>
 function startRecognition(){
@@ -24,14 +23,9 @@ function startRecognition(){
 
     recognition.onresult = function(event){
         const text = event.results[0][0].transcript;
-        const inputBox = window.parent.document.getElementById("voice_text");
-        inputBox.value = text;
-        const submitEvent = new Event("input", { bubbles: true });
-        inputBox.dispatchEvent(submitEvent);
-    }
-
-    recognition.onerror = function(event){
-        console.log("Error:", event.error);
+        const input = window.parent.document.getElementById("voice_hidden");
+        input.value = text;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
     }
 
     recognition.start();
@@ -41,27 +35,26 @@ function startRecognition(){
 
 st.components.v1.html(voice_script, height=0)
 
-# ----------- INPUT OCULTO PARA RECIBIR TEXTO -----------
+# ---------- INPUT INVISIBLE ----------
+hidden_box = st.empty()
+text = hidden_box.text_input("", key="voice_hidden", label_visibility="collapsed")
 
-text = st.text_input("", key="voice_text", label_visibility="collapsed")
-
+# Botón que activa el micrófono
 if st.button("🎙️ Iniciar reconocimiento de voz"):
     st.components.v1.html("<script>startRecognition()</script>", height=0)
 
-# Cuando cambia el texto → procesar
+# Procesar comando cuando texto cambia
 if text:
     st.success(f"Comando detectado: {text}")
-
     text_l = text.lower()
 
-    # --------- MAPEO ROBUSTO DE COMANDOS ---------
     if "encender luz" in text_l or "enciende luz" in text_l or "prende luz" in text_l:
         client.publish(TOPIC_CONTROL, json.dumps({"action": "luz_on"}))
 
     elif "apagar luz" in text_l or "apaga luz" in text_l:
         client.publish(TOPIC_CONTROL, json.dumps({"action": "luz_off"}))
 
-    elif "encender ventilador" in text_l or "enciende ventilador" in text_l or "prende ventilador" in text_l:
+    elif "encender ventilador" in text_l or "prende ventilador" in text_l:
         client.publish(TOPIC_CONTROL, json.dumps({"action": "vent_on"}))
 
     elif "apagar ventilador" in text_l or "apaga ventilador" in text_l:
@@ -76,5 +69,6 @@ if text:
     else:
         st.error("❌ No reconocí un comando válido.")
 
-    # Limpiar el texto para permitir nuevos comandos
-    st.session_state.voice_text = ""
+    # Limpia el input DE MANERA SEGURA sin causar error
+    st.session_state["voice_hidden"] = ""
+
