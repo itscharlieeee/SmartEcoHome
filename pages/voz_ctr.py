@@ -1,21 +1,17 @@
 import streamlit as st
-import speech_recognition as sr
 import paho.mqtt.client as mqtt
 import json
-import time
 
-# Configuración de la página
-st.set_page_config(page_title="Control por Voz - SmartEcoHome", page_icon="🎤")
+st.set_page_config(page_title="Control por Voz – SmartEcoHome", page_icon="🎤")
 
 st.title("🎤 Control por Voz – SmartEcoHome")
 
-# MQTT CONFIG
 MQTT_BROKER = "broker.mqttdashboard.com"
 MQTT_PORT = 1883
 MQTT_TOPIC = "smarteco/acciones"
-CLIENT_ID = "streamlit_voice"
+CLIENT_ID = "streamlit_voice_web"
 
-# Función para enviar comandos MQTT
+# --- Función MQTT ---
 def send_mqtt(action, value=None):
     try:
         client = mqtt.Client(client_id=CLIENT_ID)
@@ -31,61 +27,88 @@ def send_mqtt(action, value=None):
     except Exception as e:
         return False, str(e)
 
-# Interpretador de la orden hablada
-def interpretar_comando(texto):
-    texto = texto.lower()
+# --- Interpretador de comandos ---
+def interpretar(texto):
+    t = texto.lower()
 
-    if "encender luz" in texto or "prender luz" in texto:
+    if "encender luz" in t or "prender luz" in t:
         return ("luz_on", None)
-    if "apagar luz" in texto:
+    if "apagar luz" in t:
         return ("luz_off", None)
-
-    if "encender ventilación" in texto or "encender ventilador" in texto:
+    if "encender ventilación" in t or "encender ventilador" in t:
         return ("vent_on", None)
-    if "apagar ventilación" in texto or "apagar ventilador" in texto:
+    if "apagar ventilación" in t or "apagar ventilador" in t:
         return ("vent_off", None)
-
-    if "abrir puerta" in texto or "abrir escotilla" in texto:
+    if "abrir puerta" in t or "abrir escotilla" in t:
         return ("puerta", 180)
-    if "cerrar puerta" in texto or "cerrar escotilla" in texto:
+    if "cerrar puerta" in t or "cerrar escotilla" in t:
         return ("puerta", 0)
 
     return (None, None)
 
-st.write("Pulsa el botón y da una orden como:")
+st.write("Haz clic en el botón y da una orden como:")
 st.markdown("""
-- **'Encender luz'**  
-- **'Apagar ventilación'**  
-- **'Abrir puerta'**  
-- **'Cerrar escotilla'**  
+- **'Encender luz'**
+- **'Apagar ventilación'**
+- **'Abrir puerta'**
+- **'Cerrar escotilla'**
 """)
 
-# GRABACIÓN DE VOZ
-if st.button("🎤 Escuchar"):
-    r = sr.Recognizer()
+# --- CONTENEDOR PARA MOSTRAR TEXTO ---
+voice_text = st.empty()
 
-    with sr.Microphone() as source:
-        st.info("🎙️ Escuchando... habla ahora")
-        audio = r.listen(source)
+# --- BOTÓN QUE ACTIVA API DE VOZ ---
+st.markdown("""
+<script>
+let recognizer;
+function startRecognition() {
+    const output = document.getElementById("stVoiceText");
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognizer = new SpeechRecognition();
+    recognizer.lang = "es-ES";
+    recognizer.interimResults = false;
+    recognizer.maxAlternatives = 1;
 
-    try:
-        st.info("🔍 Procesando...")
-        text = r.recognize_google(audio, language="es-ES")
-        st.success(f"🗣️ Dijiste: **{text}**")
+    recognizer.start();
 
-        action, value = interpretar_comando(text)
+    recognizer.onresult = function(event) {
+        const text = event.results[0][0].transcript;
+        output.value = text;
+        const streamlitInput = document.querySelector('input[data-baseweb="input"]');
+        streamlitInput.value = text;
+        streamlitInput.dispatchEvent(new Event("input"));
+    };
+}
+</script>
+""", unsafe_allow_html=True)
 
-        if action is None:
-            st.error("❌ No reconocí una orden válida.")
+# Campo oculto para recibir texto desde JS
+texto_reconocido = st.text_input("Texto detectado por voz", key="voz_input")
+voice_text.text(f"🗣️ Dijiste: {texto_reconocido}")
+
+# Botón HTML que activa la voz
+st.markdown("""
+<button onclick="startRecognition()" style="
+    background-color:#4CAF50;
+    color:white;
+    padding:12px;
+    border:none;
+    border-radius:10px;
+    cursor:pointer;
+    font-size:16px;">
+🎤 Hablar
+</button>
+""", unsafe_allow_html=True)
+
+# --- Procesar comando ---
+if texto_reconocido.strip() != "":
+    action, value = interpretar(texto_reconocido)
+
+    if action is None:
+        st.error("❌ No entendí una orden válida.")
+    else:
+        ok = send_mqtt(action, value)
+        if ok:
+            st.success(f"📡 Enviado → acción `{action}`, valor `{value}`")
         else:
-            ok = send_mqtt(action, value)
-            if ok:
-                st.success(f"📡 Enviado → acción: `{action}`, valor: `{value}`")
-            else:
-                st.error("❌ Error enviando comando MQTT.")
-
-    except sr.UnknownValueError:
-        st.error("No entendí lo que dijiste 😔")
-    except Exception as e:
-        st.error(f"Ocurrió un error: {e}")
-
+            st.error("❌ Error enviando comando MQTT.")
