@@ -63,3 +63,20 @@ with col2:
 pos = st.slider("Ángulo de la Puerta", 0, 180, 90)
 if st.button("Mover Puerta"):
     enviar("puerta", pos)
+
+def on_connect(client, userdata, flags, rc):
+    client.subscribe("smarteco/sensores")
+    client.subscribe("smarteco/estado")
+    
+def on_message(client, userdata, msg):
+    topic = msg.topic
+    data = json.loads(msg.payload.decode())
+
+    if topic == "smarteco/sensores":
+        st.session_state.sensores = data
+
+    if topic == "smarteco/estado":
+        tipo = data["tipo"]
+        detalle = data["detalle"]
+        st.session_state.estado = f"{tipo}: {detalle}"
+
