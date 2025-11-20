@@ -102,6 +102,6 @@ if submitted and text:
         st.error("❌ No se reconoció un comando válido.")
 
     # reset del input
+    st.session_state.voice_text = ""
 
     st.rerun()
-
