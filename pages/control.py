@@ -7,9 +7,17 @@ st.title("🟢 Control & Sensores - SmartEcoHome")
 broker = "broker.mqttdashboard.com"
 port = 1883
 
-# ---------------- MQTT -----------------
-client = paho.Client("SmartEcoHome_Control")
+# Cliente MQTT compatible con Paho 2.0
+client = paho.Client(
+    client_id="SmartEcoHome_Control",
+    userdata=None,
+    protocol=paho.MQTTv311,
+    transport="tcp",
+    callback_api_version=1
+)
+
 sensor_data = {"temp": 0, "hum": 0, "luz": 0, "gas": 0}
+
 
 def on_message(client, userdata, message):
     global sensor_data
