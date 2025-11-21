@@ -39,13 +39,15 @@ function startRecognition(){
     recognition.onresult = function(event){
         const text = event.results[0][0].transcript;
 
-        const input = window.parent.document.querySelector('input[id="voice_input"]');
+        // Selecciona el input de Streamlit mediante su data-testid
+        const input = window.parent.document.querySelector('[data-testid="voice_input"]');
         if (input){
             input.value = text;
             input.dispatchEvent(new Event('input', { bubbles: true }));
         }
 
-        const submitBtn = window.parent.document.querySelector('button[id="voice_submit"]');
+        // Selecciona el botón de submit
+        const submitBtn = window.parent.document.querySelector('[data-testid="voice_submit"]');
         if (submitBtn){
             submitBtn.click();
         }
@@ -62,12 +64,34 @@ st.components.v1.html(js_code, height=0)
 # Formulario de comando
 # -----------------------------
 with st.form("form"):
-    text = st.text_input("Comando:", value=st.session_state.voice_text, key="voice_text", label_visibility="collapsed", id="voice_input")
-    submitted = st.form_submit_button("Procesar comando", type="primary", id="voice_submit")
+    text = st.text_input(
+        "",
+        value=st.session_state.voice_text,
+        key="voice_text",
+        placeholder="Aquí aparecerá el comando...",
+        label_visibility="collapsed"
+    )
+
+    # Agregamos testid con HTML post-insertado
+    submit = st.form_submit_button("Procesar comando")
+
+# Agregar atributos testid después de renderizar
+st.components.v1.html("""
+<script>
+let inputs = window.parent.document.querySelectorAll('input[type="text"]');
+if (inputs.length > 0){
+    inputs[inputs.length - 1].setAttribute("data-testid", "voice_input");
+}
+
+let buttons = window.parent.document.querySelectorAll('button');
+buttons[buttons.length - 1].setAttribute("data-testid", "voice_submit");
+</script>
+""", height=0)
+
 
 
 # -----------------------------
-# Botón para iniciar captura
+# Botón para activar micrófono
 # -----------------------------
 if st.button("🎙️ Iniciar reconocimiento de voz"):
     st.components.v1.html("<script>startRecognition()</script>", height=0)
@@ -76,7 +100,7 @@ if st.button("🎙️ Iniciar reconocimiento de voz"):
 # -----------------------------
 # Procesamiento de comandos
 # -----------------------------
-if submitted and text:
+if submit and text:
     cmd = text.lower()
     st.success(f"Detectado: {cmd}")
 
@@ -101,7 +125,6 @@ if submitted and text:
     else:
         st.error("❌ No se reconoció un comando válido.")
 
-    # reset del input
+    # Limpia el estado y recarga
     st.session_state.voice_text = ""
-
     st.rerun()
